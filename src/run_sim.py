@@ -61,6 +61,16 @@ def init_db_cmd(db_path: str, force: bool) -> None:
     default=str(DEFAULT_DB_PATH),
     help="Path to SQLite database file",
 )
+@click.option(
+    "--use-llm",
+    is_flag=True,
+    help="Use LLM-powered agents (requires Ollama)",
+)
+@click.option(
+    "--llm-model",
+    default="llama3.2:3b",
+    help="Ollama model to use for LLM agents",
+)
 def simulate(
     ticks: int,
     agents: int,
@@ -68,6 +78,8 @@ def simulate(
     ranking: str,
     seed: int,
     db_path: str,
+    use_llm: bool,
+    llm_model: str,
 ) -> None:
     """Run a simulation."""
     path = Path(db_path)
@@ -82,11 +94,24 @@ def simulate(
 
     # Emit run configuration
     emit_run_config(conn, agents, ticks, k, ranking, seed)
-    click.echo(f"Starting simulation: {agents} agents, {ticks} ticks, k={k}, ranking={ranking}")
+
+    agent_type = "LLM" if use_llm else "simple"
+    click.echo(
+        f"Starting simulation: {agents} {agent_type} agents, {ticks} ticks, "
+        f"k={k}, ranking={ranking}"
+    )
+    if use_llm:
+        click.echo(f"Using Ollama model: {llm_model}")
 
     # Create agents at tick 0
     current_tick = 0
-    agent_list = create_agents(conn, agents, current_tick, seed)
+    if use_llm:
+        from src.agents.llm_agent import create_llm_agents
+
+        agent_list = create_llm_agents(conn, agents, current_tick, seed, model=llm_model)
+    else:
+        agent_list = create_agents(conn, agents, current_tick, seed)
+
     click.echo(f"Created {len(agent_list)} agents")
 
     # Run simulation
